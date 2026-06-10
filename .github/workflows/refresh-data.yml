@@ -1,0 +1,108 @@
+name: Refresh Live Data
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch and update
+        run: |
+          python3 << 'PYEOF'
+          import urllib.request, json, os
+
+          ARTIST = 'The Weeknd'
+
+          req = urllib.request.Request(
+              'https://api.deezer.com/search/artist?q=' + urllib.request.quote(ARTIST),
+              headers={'User-Agent': 'Muse/1.0'}
+          )
+          data = json.loads(urllib.request.urlopen(req, timeout=15).read())
+          artist = data['data'][0]
+          print(f"Artist: {artist['name']}, Fans: {artist['nb_fan']}")
+
+          req2 = urllib.request.Request(
+              f"https://api.deezer.com/artist/{artist['id']}/top?limit=10",
+              headers={'User-Agent': 'Muse/1.0'}
+          )
+          tracks = json.loads(urllib.request.urlopen(req2, timeout=15).read()).get('data', [])
+
+          muse = {
+              'artist': {
+                  'name': artist['name'], 'id': artist['id'], 'nb_fan': artist['nb_fan'],
+                  'picture_small': artist.get('picture_small',''),
+                  'picture_medium': artist.get('picture_medium',''),
+                  'picture_big': artist.get('picture_big',''),
+                  'picture_xl': artist.get('picture_xl',''),
+              },
+              'tracks': [{
+                  'title': t.get('title',''), 'title_short': t.get('title_short',''),
+                  'duration': t.get('duration',0), 'rank': t.get('rank',0),
+                  'position': t.get('position',0),
+                  'album': {
+                      'title': t.get('album',{}).get('title',''),
+                      'cover_small': t.get('album',{}).get('cover_small',''),
+                      'cover_medium': t.get('album',{}).get('cover_medium',''),
+                      'cover_big': t.get('album',{}).get('cover_big',''),
+                      'release_date': t.get('album',{}).get('release_date',''),
+                  } if t.get('album') else None,
+                  'artist': {'name': t.get('artist',{}).get('name',artist['name'])} if t.get('artist') else None,
+              } for t in tracks]
+          }
+
+          new_json = json.dumps(muse, ensure_ascii=False)
+
+          PAGES = ['index.html', '404.html',
+                   'dashboard/index.html', 'catalogue/index.html',
+                   'marketing/index.html', 'visuals/index.html',
+                   '404/index.html', '_not-found/index.html']
+
+          for fp in PAGES:
+              if not os.path.exists(fp):
+                  print(f'  MISSING: {fp}')
+                  continue
+              with open(fp, 'r') as f:
+                  content = f.read()
+
+              prefix = 'window.__MUSE_DATA__ = '
+              start = content.find(prefix)
+              if start < 0:
+                  print(f'  SKIP {fp}: no data')
+                  continue
+
+              # Find the closing </script> after the data
+              data_start = start + len(prefix)
+              script_close = content.find('</script>', data_start)
+              if script_close < 0:
+                  print(f'  SKIP {fp}: no closing tag')
+                  continue
+
+              new_block = prefix + new_json + ';'
+              content = content[:start] + new_block + content[script_close:]
+              with open(fp, 'w') as f:
+                  f.write(content)
+              print(f'  OK: {fp}')
+
+          with open('/tmp/artist_name.txt', 'w') as f:
+              f.write(artist['name'])
+          PYEOF
+
+      - name: Commit and push
+        run: |
+          ARTIST=$(cat /tmp/artist_name.txt)
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html 404.html dashboard/index.html catalogue/index.html marketing/index.html visuals/index.html 404/index.html _not-found/index.html
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "data: refresh $ARTIST · $(date -u +%H:%M UTC)"
+            git push
+          fi
