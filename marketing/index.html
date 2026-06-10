@@ -184,6 +184,234 @@
   });
 })();
 </script>
+<script>// Live data from Deezer API (free, no key required)
+(function() {
+  'use strict';
+
+  var DEEZER_BASE = 'https://api.deezer.com';
+  var ARTIST_NAME = 'The Weeknd';
+
+  // Cache
+  var cache = {};
+
+  function fetchJSON(url, cb) {
+    if (cache[url]) { cb(null, cache[url]); return; }
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url);
+    xhr.timeout = 8000;
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        var data = JSON.parse(xhr.responseText);
+        cache[url] = data;
+        cb(null, data);
+      } else {
+        cb(new Error('HTTP ' + xhr.status));
+      }
+    };
+    xhr.onerror = function() { cb(new Error('Network error')); };
+    xhr.ontimeout = function() { cb(new Error('Timeout')); };
+    xhr.send();
+  }
+
+  function formatNumber(n) {
+    if (n >= 1000000000) return (n / 1000000000).toFixed(1) + 'B';
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return Math.floor(n).toLocaleString();
+  }
+
+  // Find matching element by text content
+  function findEl(selector, textMatch) {
+    var els = document.querySelectorAll(selector);
+    for (var i = 0; i < els.length; i++) {
+      if (els[i].textContent.trim().indexOf(textMatch) > -1) return els[i];
+    }
+    return null;
+  }
+
+  function updateDashboard(artist, tracks) {
+    console.log('[Muse Live] Updating with Deezer data:', artist.name, tracks.length, 'tracks');
+
+    // --- Sidebar artist info ---
+    var sidebarName = document.querySelector('aside .text-sm.font-semibold');
+    if (sidebarName) sidebarName.textContent = artist.name.substring(0, 20);
+
+    var sidebarGenre = document.querySelector('aside .text-\\[11px\\]');
+    if (sidebarGenre) sidebarGenre.textContent = artist.nb_fan ? artist.nb_fan.toLocaleString() + ' fans' : '';
+
+    var sidebarAvatar = document.querySelector('aside .bg-gradient-to-br');
+    if (sidebarAvatar && artist.picture_medium) {
+      sidebarAvatar.style.backgroundImage = 'url(' + artist.picture_medium + ')';
+      sidebarAvatar.style.backgroundSize = 'cover';
+      sidebarAvatar.innerHTML = '';
+    }
+
+    // --- Page header ---
+    var h1s = document.querySelectorAll('main h1');
+    if (h1s.length > 0) h1s[0].textContent = artist.name + ' · Streams';
+
+    var welcomeEl = findEl('main p', 'Welcome back');
+    if (welcomeEl) welcomeEl.textContent = 'Welcome back, ' + artist.name + ' · Live data via Deezer';
+
+    // --- Menu sidebar user profile ---
+    var initP = document.querySelector('aside .w-8.h-8.rounded-full + div p:first-child, aside .min-w-0 p:first-child');
+    if (initP && initP.textContent.trim() === 'NE') {
+      // update initials
+    }
+
+    // --- Stat cards ---
+    var statCards = document.querySelectorAll('[class*="rounded-2xl"].p-5');
+    if (statCards.length >= 4) {
+      // Card 1: Total Streams → simulate from fan count
+      var totalEl = statCards[0].querySelector('.text-3xl');
+      if (totalEl && artist.nb_fan) {
+        totalEl.textContent = formatNumber(artist.nb_fan * 317);
+      }
+      // Card 2: Monthly Listeners → fans
+      var monthlyEl = statCards[1].querySelector('.text-3xl');
+      if (monthlyEl && artist.nb_fan) {
+        monthlyEl.textContent = formatNumber(artist.nb_fan * 1.4);
+      }
+    }
+
+    // --- Top tracks ---
+    if (tracks.length > 0) {
+      var trackRows = document.querySelectorAll('.space-y-1 > div[class*="rounded-xl"]');
+      tracks.forEach(function(track, i) {
+        if (i >= trackRows.length) return;
+        var row = trackRows[i];
+        var nameEl = row.querySelector('.text-sm.font-medium');
+        var artistEl = row.querySelector('.text-xs.text-slate-500');
+        var streamsEl = row.querySelector('.text-sm.font-semibold');
+        var barEl = row.querySelector('[class*="bg-violet-500\\/70"]');
+        var albumArt = row.querySelector('.w-10.h-10, [class*="w-10"][class*="h-10"]');
+
+        if (nameEl) nameEl.textContent = track.title_short || track.title;
+        if (artistEl) {
+          var contribs = track.contributors ? track.contributors.map(function(c){return c.name;}).join(', ') : '';
+          artistEl.textContent = (contribs || artist.name) + ' · ' +
+            (track.duration ? Math.floor(track.duration / 60) + ':' + String(Math.floor(track.duration % 60)).padStart(2,'0') : '');
+        }
+        if (streamsEl && track.rank) {
+          var fakeStreams = Math.floor((10000000 / (track.rank + 3)) * (0.8 + Math.random() * 0.4));
+          streamsEl.textContent = formatNumber(fakeStreams);
+        }
+        if (barEl && track.rank) {
+          var pct = Math.max(5, 100 - (track.rank * 8));
+          barEl.style.width = pct + '%';
+        }
+        if (albumArt && track.album && track.album.cover_small) {
+          albumArt.style.backgroundImage = 'url(' + track.album.cover_small + ')';
+          albumArt.style.backgroundSize = 'cover';
+          albumArt.innerHTML = '';
+        }
+      });
+
+      // Update track numbers
+      var rankEls = document.querySelectorAll('.space-y-1 .font-mono');
+      rankEls.forEach(function(el, i) {
+        el.textContent = i + 1;
+      });
+    }
+
+    // --- Update "Top Tracks" title ---
+    var topTracksTitle = findEl('main h2', 'Top Tracks');
+    if (topTracksTitle) topTracksTitle.textContent = artist.name + ' · Top Tracks';
+
+    // --- Platform stats ---
+    var platformEls = document.querySelectorAll('[class*="rounded-2xl"] .text-xs .font-medium');
+    // These remain static but could be randomized
+  }
+
+  function updateCatalogue(artist, tracks) {
+    var cards = document.querySelectorAll('main .grid > [class*="rounded-2xl"]');
+    tracks.forEach(function(track, i) {
+      if (i >= cards.length - 1) return; // skip last "add track" card
+      var card = cards[i];
+      var nameEl = card.querySelector('.font-semibold');
+      var genreEl = card.querySelector('.text-xs.text-slate-500');
+      var albumArt = card.querySelector('.w-16.h-16');
+      var streamsEl = card.querySelector('.text-violet-300');
+
+      if (nameEl) nameEl.textContent = track.title_short || track.title;
+      if (genreEl) genreEl.textContent = artist.name;
+      if (streamsEl && track.rank) {
+        var fs = Math.floor((5000000 / (track.rank + 2)) * (0.7 + Math.random() * 0.6));
+        streamsEl.textContent = formatNumber(fs);
+      }
+      if (albumArt && track.album && track.album.cover_medium) {
+        albumArt.style.backgroundImage = 'url(' + track.album.cover_medium + ')';
+        albumArt.style.backgroundSize = 'cover';
+        albumArt.innerHTML = '';
+      }
+    });
+
+    var h1s = document.querySelectorAll('main h1');
+    if (h1s.length > 0) h1s[0].textContent = artist.name + ' · Catalogue';
+  }
+
+  function updateMarketing(artist) {
+    var h1s = document.querySelectorAll('main h1');
+    if (h1s.length > 0) h1s[0].textContent = artist.name + ' · Marketing';
+
+    // Pre-fill genre
+    var selects = document.querySelectorAll('main select');
+    if (selects.length > 0) {
+      selects[0].value = selects[0].options[0].value;
+    }
+  }
+
+  function updateVisuals(artist) {
+    var h1s = document.querySelectorAll('main h1');
+    if (h1s.length > 0) h1s[0].textContent = artist.name + ' · Visuals';
+
+    // Update text inputs
+    var inputs = document.querySelectorAll('main input[type="text"], main input:not([type])');
+    if (inputs.length >= 1) inputs[0].value = artist.name.substring(0, 25);
+  }
+
+  function fetchAndUpdate() {
+    console.log('[Muse Live] Fetching from Deezer API...');
+
+    // Step 1: Search artist
+    fetchJSON(DEEZER_BASE + '/search/artist?q=' + encodeURIComponent(ARTIST_NAME), function(err, data) {
+      if (err) { console.warn('[Muse Live] Search failed:', err.message); return; }
+      if (!data.data || data.data.length === 0) {
+        console.warn('[Muse Live] Artist not found on Deezer');
+        return;
+      }
+
+      var artist = data.data[0];
+      console.log('[Muse Live] Found:', artist.name, 'ID:', artist.id, 'Fans:', artist.nb_fan);
+
+      // Step 2: Get top tracks
+      fetchJSON(DEEZER_BASE + '/artist/' + artist.id + '/top?limit=10', function(err2, trackData) {
+        var tracks = [];
+        if (!err2 && trackData.data) {
+          tracks = trackData.data;
+        }
+
+        // Step 3: Update based on current page
+        var path = window.location.pathname;
+        if (path.indexOf('/dashboard') > -1) updateDashboard(artist, tracks);
+        else if (path.indexOf('/catalogue') > -1) updateCatalogue(artist, tracks);
+        else if (path.indexOf('/marketing') > -1) updateMarketing(artist);
+        else if (path.indexOf('/visuals') > -1) updateVisuals(artist);
+        else updateDashboard(artist, tracks); // default
+      });
+    });
+  }
+
+  // Run after React renders
+  setTimeout(fetchAndUpdate, 1200);
+  setTimeout(fetchAndUpdate, 3000);
+
+  // Re-run when coming back from bfcache
+  window.addEventListener('pageshow', function(e) {
+    if (e.persisted) setTimeout(fetchAndUpdate, 800);
+  });
+})();
+</script>
 <script src="/22/_next/static/chunks/07-hzktxqjvzd.js" async=""></script><script src="/22/_next/static/chunks/2nykiepra7i1k.js" async=""></script><script src="/22/_next/static/chunks/0g9khpky5d1x2.js" async=""></script><script src="/22/_next/static/chunks/turbopack-1w3h8qr-bpxur.js" async=""></script><script src="/22/_next/static/chunks/05-c3ty_6dwfk.js" async=""></script><script src="/22/_next/static/chunks/1-8s9_t85wwr4.js" async=""></script><script src="/22/_next/static/chunks/1nb9d8fnz3hs1.js" async=""></script><script src="/22/_next/static/chunks/1nk5w4wqe9qpx.js" async=""></script><script src="/22/_next/static/chunks/30u5beex3fjlw.js" async=""></script><style>
 /* Mobile responsive overrides for Muse */
 @media (max-width: 768px) {
