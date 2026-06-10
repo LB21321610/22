@@ -13,26 +13,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch and update
+      - name: Fetch artist data and build search index
         run: |
           python3 << 'PYEOF'
-          import urllib.request, json, os
+          import urllib.request, json, os, re, time
 
           ARTIST = 'The Weeknd'
+          DEEZER = 'https://api.deezer.com'
+          UA = {'User-Agent': 'Muse/1.0'}
 
-          req = urllib.request.Request(
-              'https://api.deezer.com/search/artist?q=' + urllib.request.quote(ARTIST),
-              headers={'User-Agent': 'Muse/1.0'}
-          )
-          data = json.loads(urllib.request.urlopen(req, timeout=15).read())
+          def api(path):
+              req = urllib.request.Request(DEEZER + path, headers=UA)
+              return json.loads(urllib.request.urlopen(req, timeout=15).read())
+
+          # ===== 1. Main artist + tracks =====
+          print('=== Main artist ===')
+          data = api('/search/artist?q=' + urllib.request.quote(ARTIST))
           artist = data['data'][0]
-          print(f"Artist: {artist['name']}, Fans: {artist['nb_fan']}")
+          print(f"  {artist['name']}: {artist['nb_fan']} fans")
 
-          req2 = urllib.request.Request(
-              f"https://api.deezer.com/artist/{artist['id']}/top?limit=10",
-              headers={'User-Agent': 'Muse/1.0'}
-          )
-          tracks = json.loads(urllib.request.urlopen(req2, timeout=15).read()).get('data', [])
+          tracks_data = api('/artist/' + str(artist['id']) + '/top?limit=10')
+          tracks = tracks_data.get('data', [])
 
           muse = {
               'artist': {
@@ -59,6 +60,68 @@ jobs:
 
           new_json = json.dumps(muse, ensure_ascii=False)
 
+          # ===== 2. Build artist search index (popular artists across genres) =====
+          print('\n=== Building artist index ===')
+          # Search across popular charts + genres
+          search_terms = [
+              'top', 'pop', 'rock', 'hip hop', 'electronic', 'r&b', 'indie',
+              'drake', 'taylor', 'beyonce', 'ed sheeran', 'billie eilish',
+              'kendrick', 'ariana', 'bad bunny', 'dua lipa', 'harry styles',
+              'travis scott', 'post malone', 'adele', 'coldplay', 'bruno mars',
+              'rihanna', 'justin bieber', 'lady gaga', 'kanye', 'eminem',
+              'sza', 'olivia rodrigo', 'doja cat', 'future', '21 savage',
+              'lil baby', 'morgan wallen', 'luke combs', 'taylor swift artist',
+              'blackpink', 'bts', 'jay chou artist', 'jj lin', 'eason chan',
+              'lisa artist', 'rose artist', 'jennie artist', 'jisoo artist',
+              'newjeans', 'ive', 'le sserafim', 'aespa', 'gidle',
+              'frank ocean', 'tyler the creator', 'tame impala', 'lana del rey',
+              'mac miller', 'xzibit', '50 cent', 'snoop dogg', 'dr dre',
+              'wizkid', 'burna boy', 'davido', 'rema', 'tems',
+              'shakira', 'rosalia', 'j balvin', 'karol g', 'maluma',
+              'stromae', 'angèle', 'daft punk', 'justice music',
+          ]
+
+          index = {}
+          seen = set()
+          for term in search_terms:
+              try:
+                  res = api('/search/artist?q=' + urllib.request.quote(term))
+                  for a in res.get('data', [])[:5]:
+                      aid = str(a['id'])
+                      if aid in seen: continue
+                      seen.add(aid)
+                      index[aid] = {
+                          'id': a['id'],
+                          'name': a['name'],
+                          'nb_fan': a['nb_fan'],
+                          'picture_small': a.get('picture_small', ''),
+                          'picture_medium': a.get('picture_medium', ''),
+                      }
+                  time.sleep(0.3)  # rate limit
+              except Exception as e:
+                  print(f'  warn: {term}: {e}')
+
+          # Also add top chart artists
+          try:
+              chart = api('/chart/0/artists')
+              for a in chart.get('data', [])[:30]:
+                  aid = str(a['id'])
+                  if aid in seen: continue
+                  seen.add(aid)
+                  index[aid] = {
+                      'id': a['id'],
+                      'name': a['name'],
+                      'nb_fan': a['nb_fan'],
+                      'picture_small': a.get('picture_small', ''),
+                      'picture_medium': a.get('picture_medium', ''),
+                  }
+          except Exception as e:
+              print(f'  warn: chart: {e}')
+
+          artists_json = json.dumps(list(index.values()), ensure_ascii=False)
+          print(f'  Index: {len(index)} artists, {len(artists_json)} bytes')
+
+          # ===== 3. Update HTML files =====
           PAGES = ['index.html', '404.html',
                    'dashboard/index.html', 'catalogue/index.html',
                    'marketing/index.html', 'visuals/index.html',
@@ -71,27 +134,31 @@ jobs:
               with open(fp, 'r') as f:
                   content = f.read()
 
+              # Replace __MUSE_DATA__
               prefix = 'window.__MUSE_DATA__ = '
               start = content.find(prefix)
-              if start < 0:
-                  print(f'  SKIP {fp}: no data')
-                  continue
+              if start >= 0:
+                  data_start = start + len(prefix)
+                  script_close = content.find('</script>', data_start)
+                  if script_close >= 0:
+                      content = content[:data_start] + new_json + ';' + content[script_close:]
 
-              # Find the closing </script> after the data
-              data_start = start + len(prefix)
-              script_close = content.find('</script>', data_start)
-              if script_close < 0:
-                  print(f'  SKIP {fp}: no closing tag')
-                  continue
+              # Replace __MUSE_ARTIST_INDEX__
+              idx_prefix = 'window.__MUSE_ARTIST_INDEX__ = '
+              idx_start = content.find(idx_prefix)
+              if idx_start >= 0:
+                  idx_data_start = idx_start + len(idx_prefix)
+                  idx_script_close = content.find('</script>', idx_data_start)
+                  if idx_script_close >= 0:
+                      content = content[:idx_data_start] + artists_json + ';' + content[idx_script_close:]
 
-              new_block = prefix + new_json + ';'
-              content = content[:start] + new_block + content[script_close:]
               with open(fp, 'w') as f:
                   f.write(content)
               print(f'  OK: {fp}')
 
+          # Save for commit message
           with open('/tmp/artist_name.txt', 'w') as f:
-              f.write(artist['name'])
+              f.write(artist['name'] + ' + ' + str(len(index)) + ' indexed')
           PYEOF
 
       - name: Commit and push
