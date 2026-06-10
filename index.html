@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en" class="geist_a71539c9-module__T19VSG__variable geist_mono_8d43a2aa-module__8Li5zG__variable h-full"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/><link rel="preload" href="/22/_next/static/media/797e433ab948586e-s.p.0r6juujl39pe6.woff2" as="font" crossorigin="" type="font/woff2"/><link rel="preload" href="/22/_next/static/media/caa3a2e1cccd8315-s.p.0wgildi0cnwt9.woff2" as="font" crossorigin="" type="font/woff2"/><link rel="stylesheet" href="/22/_next/static/chunks/2xhefc_u50c5a.css" data-precedence="next"/><link rel="preload" as="script" fetchPriority="low" href="/22/_next/static/chunks/2kk9zqg5r_gnh.js"/><script>// Fix SPA routing: bypass Next.js router for sidebar/bottom-nav links
+<!DOCTYPE html><html lang="en" class="geist_a71539c9-module__T19VSG__variable geist_mono_8d43a2aa-module__8Li5zG__variable h-full"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/><link rel="preload" href="/22/_next/static/media/797e433ab948586e-s.p.0r6juujl39pe6.woff2" as="font" crossorigin="" type="font/woff2"/><link rel="preload" href="/22/_next/static/media/caa3a2e1cccd8315-s.p.0wgildi0cnwt9.woff2" as="font" crossorigin="" type="font/woff2"/><link rel="stylesheet" href="/22/_next/static/chunks/2xhefc_u50c5a.css" data-precedence="next"/><link rel="preload" as="script" fetchPriority="low" href="/22/_next/static/chunks/2kk9zqg5r_gnh.js"/><script>// Fix SPA routing with sidebar click animation
 // GitHub Pages serves at /22/ but Next.js router doesn't know this basePath
 (function() {
   'use strict';
@@ -7,16 +7,18 @@
     if (!link) return;
     var href = link.getAttribute('href');
     if (!href) return;
-    // Only intercept internal navigation links (not external, not #, not javascript:)
     if (href.startsWith('/22/') || href.startsWith('/dashboard') || href.startsWith('/catalogue') || href.startsWith('/marketing') || href.startsWith('/visuals')) {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
-      // Add /22/ prefix if needed
       if (!href.startsWith('/22/')) {
         href = '/22' + href;
       }
-      window.location.href = href;
+      // Play click animation before navigating
+      link.classList.add('nav-clicked');
+      setTimeout(function() {
+        window.location.href = href;
+      }, 180);
     }
   }, true);
 })();
