@@ -189,22 +189,15 @@
 // Muse Live Data System
 // Real music data from Last.fm + Spotify APIs
 // ============================================================
-// Register your keys:
-//   Last.fm: https://www.last.fm/api/account/create
-//   Spotify: https://developer.spotify.com/dashboard (create App)
-// ============================================================
 (function() {
   'use strict';
 
-  // ===== CONFIGURATION - Replace with your keys =====
   var CONFIG = {
     lastfmKey: 'YOUR_LASTFM_API_KEY',
-    spotifyId: 'YOUR_SPOTIFY_CLIENT_ID',
-    spotifySecret: 'YOUR_SPOTIFY_CLIENT_SECRET',
+    spotifyId: 'ca391a4b1fb24e2e874c36e4cf5b3346',
+    spotifySecret: 'ab1cdd746dbd4f2c8b4ada7a7c5ddcec',
     artistName: 'The Weeknd'
   };
-
-  // ===== API Clients =====
 
   // Last.fm API
   function lastfm(method, params, cb) {
@@ -257,7 +250,7 @@
     });
   }
 
-  // ===== Utilities =====
+  // Utilities
   function fmt(n) {
     if (n >= 1000000000) return (n / 1000000000).toFixed(1) + 'B';
     if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
@@ -273,10 +266,7 @@
     return null;
   }
 
-  // ===== DOM Updaters =====
-
   function updateSidebar(artist, spotifyArtist) {
-    // Avatar
     var avatar = document.querySelector('aside .bg-gradient-to-br');
     var img = (spotifyArtist && spotifyArtist.images && spotifyArtist.images.length > 0)
       ? spotifyArtist.images[0].url
@@ -287,92 +277,71 @@
       avatar.style.backgroundPosition = 'center';
       avatar.innerHTML = '';
     }
-
-    // Name
     var nameEl = document.querySelector('aside .text-sm.font-semibold');
     if (nameEl) nameEl.textContent = artist.name.substring(0, 22);
-
-    // Genre / followers
     var genreEl = document.querySelector('aside .text-\\[11px\\]');
     if (genreEl) {
       var genres = spotifyArtist && spotifyArtist.genres && spotifyArtist.genres.length > 0
         ? spotifyArtist.genres[0]
         : (artist.tags && artist.tags.tag && artist.tags.tag.length > 0
-          ? artist.tags.tag[0].name
-          : '');
+          ? artist.tags.tag[0].name : '');
       var followers = spotifyArtist && spotifyArtist.followers
         ? fmt(spotifyArtist.followers.total) + ' followers'
         : (artist.stats ? fmt(artist.stats.listeners) + ' listeners' : '');
       genreEl.textContent = genres || followers;
     }
-
-    // Initials
     var initEl = document.querySelector('aside .text-xs.font-bold');
     if (initEl) initEl.textContent = artist.name.substring(0, 2).toUpperCase();
   }
 
   function updateDashboard(artist, tracks, spotifyArtist, spotifyTracks) {
-    console.log('[Muse Live] Updating dashboard with real data...');
-
-    // Page title
+    console.log('[Muse Live] Updating dashboard...');
     var h1 = document.querySelector('main h1');
     if (h1) {
-      var spotifyPop = spotifyArtist ? ' · Popularity ' + spotifyArtist.popularity + '/100' : '';
-      h1.textContent = artist.name + spotifyPop;
+      var pop = spotifyArtist ? ' · Popularity ' + spotifyArtist.popularity + '/100' : '';
+      h1.textContent = artist.name + pop;
     }
-
-    // Welcome message
     var welcomeEl = findText('main p', 'Welcome back');
     if (welcomeEl) {
-      var listeners = artist.stats ? parseInt(artist.stats.listeners).toLocaleString() : '';
-      welcomeEl.textContent = 'Live data from Spotify + Last.fm' +
-        (listeners ? ' · ' + listeners + ' listeners' : '');
+      welcomeEl.textContent = 'Live · Spotify';
+      if (spotifyArtist && spotifyArtist.followers) {
+        welcomeEl.textContent += ' · ' + fmt(spotifyArtist.followers.total) + ' followers';
+      }
     }
 
-    // === Stat Cards ===
     var statCards = document.querySelectorAll('[class*="rounded-2xl"].p-5');
 
-    // Card 1: Total Streams → Spotify popularity × playcount estimate
     if (statCards[0]) {
       var totalEl = statCards[0].querySelector('.text-3xl');
       var subEl = statCards[0].querySelector('.text-sm');
-      if (totalEl && artist.stats) {
-        totalEl.textContent = fmt(parseInt(artist.stats.playcount || 0));
-      }
-      if (subEl && spotifyArtist) {
-        subEl.textContent = 'Spotify popularity: ' + spotifyArtist.popularity + '/100';
-      }
+      if (totalEl && artist.stats) totalEl.textContent = fmt(parseInt(artist.stats.playcount || 0));
+      if (subEl) subEl.textContent = 'Spotify: ' + (spotifyArtist ? spotifyArtist.popularity + '/100 popularity' : '');
     }
 
-    // Card 2: Monthly Listeners → Last.fm listeners
     if (statCards[1]) {
       var monthlyEl = statCards[1].querySelector('.text-3xl');
-      if (monthlyEl && artist.stats) {
+      if (monthlyEl && spotifyArtist && spotifyArtist.followers) {
+        monthlyEl.textContent = fmt(spotifyArtist.followers.total);
+      } else if (monthlyEl && artist.stats) {
         monthlyEl.textContent = fmt(parseInt(artist.stats.listeners || 0));
       }
+      var sub2 = statCards[1].querySelector('.text-sm');
+      if (sub2 && spotifyArtist) sub2.textContent = 'Spotify followers';
     }
 
-    // Card 3: Saves/Likes → estimated from playcount
     if (statCards[2]) {
       var savesEl = statCards[2].querySelector('.text-3xl');
-      if (savesEl && artist.stats) {
-        var saves = Math.floor(parseInt(artist.stats.playcount || 0) * 0.014);
-        savesEl.textContent = fmt(saves);
-      }
+      if (savesEl && spotifyArtist) savesEl.textContent = fmt(Math.floor(spotifyArtist.followers.total * 0.35));
     }
 
-    // Card 4: Playlist Adds → spotify followers / 50
     if (statCards[3]) {
       var addsEl = statCards[3].querySelector('.text-3xl');
-      if (addsEl && spotifyArtist && spotifyArtist.followers) {
-        addsEl.textContent = fmt(Math.floor(spotifyArtist.followers.total / 50));
-      }
+      if (addsEl && spotifyArtist) addsEl.textContent = fmt(Math.floor(spotifyArtist.followers.total / 50));
     }
 
-    // === Top Tracks ===
     if (tracks.length > 0) {
       var trackRows = document.querySelectorAll('.space-y-1 > div[class*="rounded-xl"]');
-      var maxPlaycount = tracks[0].playcount ? parseInt(tracks[0].playcount) : 1;
+      var maxPc = tracks[0].playcount ? parseInt(tracks[0].playcount) : 1;
 
       tracks.forEach(function(track, i) {
         if (i >= trackRows.length) return;
@@ -385,56 +354,50 @@
         var rankEl = row.querySelector('.font-mono');
 
         if (nameEl) nameEl.textContent = track.name.substring(0, 30);
-        if (streamsEl && track.playcount) {
-          streamsEl.textContent = fmt(parseInt(track.playcount));
-        }
-        if (barEl && track.playcount) {
-          barEl.style.width = Math.max(3, (parseInt(track.playcount) / maxPlaycount * 100)) + '%';
-        }
+        if (streamsEl && track.playcount) streamsEl.textContent = fmt(parseInt(track.playcount));
+        if (barEl && track.playcount) barEl.style.width = Math.max(3, (parseInt(track.playcount) / maxPc * 100)) + '%';
         if (rankEl) rankEl.textContent = i + 1;
 
-        // Spotify track details if available
         if (detailEl) {
-          var spotifyTrack = spotifyTracks && spotifyTracks[i];
+          var st = spotifyTracks && spotifyTracks[i];
           var parts = [];
           if (track.artist && track.artist.name) parts.push(track.artist.name);
-          if (spotifyTrack) {
-            if (spotifyTrack.album) parts.push(spotifyTrack.album.name.substring(0, 15));
-            if (spotifyTrack.duration_ms) {
-              var d = Math.floor(spotifyTrack.duration_ms / 1000);
+          if (st) {
+            if (st.album) parts.push(st.album.name.substring(0, 15));
+            if (st.duration_ms) {
+              var d = Math.floor(st.duration_ms / 1000);
               parts.push(Math.floor(d/60) + ':' + String(d%60).padStart(2,'0'));
             }
           }
           detailEl.textContent = parts.join(' · ');
         }
 
-        // Album art from Spotify
-        if (artEl && spotifyTrack && spotifyTrack.album && spotifyTrack.album.images) {
-          artEl.style.backgroundImage = 'url(' + spotifyTrack.album.images[0].url + ')';
-          artEl.style.backgroundSize = 'cover';
-          artEl.innerHTML = '';
+        if (artEl) {
+          var st2 = spotifyTracks && spotifyTracks[i];
+          if (st2 && st2.album && st2.album.images && st2.album.images[2]) {
+            artEl.style.backgroundImage = 'url(' + st2.album.images[2].url + ')';
+            artEl.style.backgroundSize = 'cover';
+            artEl.innerHTML = '';
+          }
         }
       });
 
-      // Update track list title
       var topTitle = findText('main h2', 'Top Tracks');
       if (topTitle) topTitle.textContent = artist.name + ' · Top Tracks';
     }
 
-    // === Platform breakdown (estimated from Spotify) ===
-    if (spotifyArtist && spotifyArtist.popularity) {
-      var platformRows = document.querySelectorAll('[class*="rounded-2xl"] .space-y-2 > div');
+    if (spotifyArtist) {
       var pop = spotifyArtist.popularity;
-      // Estimate platform shares based on popularity
+      var rows = document.querySelectorAll('[class*="rounded-2xl"] .space-y-2 > div');
       var shares = [
-        { name: 'Spotify', pct: Math.min(65, 35 + pop * 0.4) },
-        { name: 'Apple Music', pct: Math.min(40, 15 + pop * 0.25) },
-        { name: 'YouTube Music', pct: Math.min(25, 10 + pop * 0.15) },
-        { name: 'Amazon Music', pct: Math.min(15, 5 + pop * 0.1) },
-        { name: 'Tidal', pct: Math.min(10, 2 + pop * 0.06) }
+        { name: 'Spotify', pct: Math.min(60, 30 + pop * 0.4) },
+        { name: 'Apple Music', pct: Math.min(35, 12 + pop * 0.3) },
+        { name: 'YouTube Music', pct: Math.min(22, 8 + pop * 0.18) },
+        { name: 'Amazon Music', pct: Math.min(14, 5 + pop * 0.1) },
+        { name: 'Tidal', pct: Math.min(8, 2 + pop * 0.06) }
       ];
       var total = shares.reduce(function(s, x) { return s + x.pct; }, 0);
-      platformRows.forEach(function(row, i) {
+      rows.forEach(function(row, i) {
         if (i >= shares.length) return;
         var share = Math.round(shares[i].pct / total * 100);
         var nameEl = row.querySelector('.text-slate-400');
@@ -444,11 +407,11 @@
       });
     }
 
-    // Mark as live
-    var liveIndicator = document.querySelector('.animate-pulse');
-    if (liveIndicator) {
-      liveIndicator.parentElement.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400" style="animation: none; box-shadow: 0 0 6px #00d294;"></span>' +
-        '<span style="font-size:13px;color:#5ee9b5;">Live · Last.fm + Spotify</span>';
+    var liveDot = document.querySelector('.animate-pulse');
+    if (liveDot && liveDot.parentElement) {
+      liveDot.parentElement.innerHTML =
+        '<span class="w-2 h-2 rounded-full" style="display:inline-block;background:#00d294;box-shadow:0 0 6px #00d294;"></span> ' +
+        '<span style="font-size:13px;color:#5ee9b5;">Live · Spotify</span>';
     }
   }
 
@@ -457,12 +420,12 @@
     if (h1) h1.textContent = artist.name + ' · Catalogue';
 
     var subEl = findText('main p', 'released');
-    if (subEl) subEl.textContent = tracks.length + ' tracks · Live data';
+    if (subEl) subEl.textContent = tracks.length + ' tracks · Spotify data';
 
     var cards = document.querySelectorAll('main .grid > [class*="rounded-2xl"]');
 
     tracks.forEach(function(track, i) {
-      if (i >= cards.length - 1) return; // skip add button
+      if (i >= cards.length - 1) return;
       var card = cards[i];
       var nameEl = card.querySelector('.font-semibold');
       var genreEl = card.querySelector('.text-xs.text-slate-500');
@@ -470,14 +433,12 @@
       var streamsEl = card.querySelector('.text-violet-300');
       var durEl = card.querySelector('.grid-cols-3 > div:first-child span:last-child');
       var bpmEl = card.querySelector('.grid-cols-3 > div:nth-child(2) span:last-child');
-      var keyEl = card.querySelector('.grid-cols-3 > div:nth-child(3) span:last-child');
       var dateEl = card.querySelectorAll('.text-xs.-mt-1 .text-slate-400');
 
       if (nameEl) nameEl.textContent = track.name.substring(0, 25);
       if (genreEl) genreEl.textContent = artist.name;
       if (streamsEl && track.playcount) streamsEl.textContent = fmt(parseInt(track.playcount));
 
-      // Spotify track details
       var st = spotifyTracks && spotifyTracks[i];
       if (artEl && st && st.album && st.album.images && st.album.images[1]) {
         artEl.style.backgroundImage = 'url(' + st.album.images[1].url + ')';
@@ -488,166 +449,114 @@
         var sec = Math.floor(st.duration_ms / 1000);
         durEl.textContent = Math.floor(sec/60) + ':' + String(sec%60).padStart(2,'0');
       }
-      if (st && st.popularity) {
-        if (bpmEl) bpmEl.textContent = st.popularity + ' pop';
-      }
-      if (st && st.album && st.album.release_date && dateEl && dateEl.length > 0) {
-        dateEl[dateEl.length - 1].textContent = st.album.release_date;
+      if (bpmEl && st && st.popularity) bpmEl.textContent = st.popularity + ' pop';
+      if (st && st.album && st.album.release_date && dateEl.length > 0) {
+        dateEl[dateEl.length-1].textContent = st.album.release_date;
       }
     });
   }
 
   function updateMarketing(artist, spotifyArtist) {
     var h1 = document.querySelector('main h1');
-    if (h1) h1.textContent = artist.name + ' · Marketing Plan';
-
+    if (h1) h1.textContent = artist.name + ' · Marketing';
     var subEl = findText('main p', 'Generate');
     if (subEl) {
-      var followers = spotifyArtist && spotifyArtist.followers
-        ? fmt(spotifyArtist.followers.total)
-        : '';
-      subEl.textContent = 'Live strategy for ' + artist.name +
-        (followers ? ' · ' + followers + ' followers' : '');
+      var f = spotifyArtist && spotifyArtist.followers ? fmt(spotifyArtist.followers.total) : '';
+      subEl.textContent = 'Live strategy · ' + artist.name + (f ? ' · ' + f + ' followers' : '');
     }
   }
 
   function updateVisuals(artist, spotifyArtist) {
     var h1 = document.querySelector('main h1');
     if (h1) h1.textContent = artist.name + ' · Visuals';
-
-    // Update text inputs
-    var inputs = document.querySelectorAll('main input[type="text"]');
-    if (inputs.length >= 1 && inputs[0].value === 'Nova Eclipse') {
-      inputs[0].value = artist.name.substring(0, 22);
+    var inputs = document.querySelectorAll('main input');
+    for (var i = 0; i < inputs.length; i++) {
+      if (inputs[i].type === 'text' && inputs[i].value === 'Nova Eclipse') {
+        inputs[i].value = artist.name.substring(0, 22);
+      }
     }
-    if (inputs.length >= 2 && inputs[1].value === 'Midnight Signal') {
-      // Keep default or use top track name
-    }
-
-    var subEl = findText('main p', 'Create artwork');
-    if (subEl) subEl.textContent = 'Promo visuals for ' + artist.name;
   }
 
-  // ===== Main fetch orchestrator =====
+  // Main
   function fetchAll() {
     var hasLastfm = CONFIG.lastfmKey && CONFIG.lastfmKey.indexOf('YOUR_') !== 0;
     var hasSpotify = CONFIG.spotifyId && CONFIG.spotifyId.indexOf('YOUR_') !== 0;
 
-    if (!hasLastfm && !hasSpotify) {
-      console.log('[Muse Live] No API keys configured.');
-      console.log('[Muse Live] Register at:');
-      console.log('[Muse Live]   Last.fm: https://www.last.fm/api/account/create');
-      console.log('[Muse Live]   Spotify: https://developer.spotify.com/dashboard');
+    if (!hasSpotify) {
+      console.log('[Muse Live] Spotify not configured. Set spotifyId and spotifySecret.');
       return;
     }
+    console.log('[Muse Live] Fetching from Spotify...');
 
-    console.log('[Muse Live] Fetching live data... (Last.fm: ' + hasLastfm + ', Spotify: ' + hasSpotify + ')');
-
-    // Parallel: Last.fm artist + Spotify search
     var artistData = null;
     var spotifyArtist = null;
     var spotifyId = null;
-    var pending = hasLastfm ? 1 : 0;
-    if (hasSpotify) pending++;
+    var pending = hasLastfm ? 2 : 1;
 
-    function checkDone() {
-      pending--;
-      if (pending > 0) return;
-      // Both done, now fetch tracks
-      fetchTracks();
-    }
+    function done() { pending--; if (pending === 0) fetchTracks(); }
 
-    // Last.fm artist info
+    spotify('search?q=' + encodeURIComponent(CONFIG.artistName) + '&type=artist&limit=1', function(err, data) {
+      if (!err && data.artists && data.artists.items.length > 0) {
+        spotifyArtist = data.artists.items[0];
+        spotifyId = spotifyArtist.id;
+        console.log('[Muse Live] Spotify:', spotifyArtist.name, '·', fmt(spotifyArtist.followers.total), 'followers · popularity', spotifyArtist.popularity);
+      }
+      done();
+    });
+
     if (hasLastfm) {
       lastfm('artist.getinfo', { artist: CONFIG.artistName }, function(err, data) {
-        if (!err && data.artist) {
-          artistData = data.artist;
-          console.log('[Muse Live] Last.fm:', artistData.name, 'playcount:', artistData.stats.playcount);
-        } else {
-          console.warn('[Muse Live] Last.fm fetch failed');
-        }
-        checkDone();
-      });
-    }
-
-    // Spotify artist search
-    if (hasSpotify) {
-      spotify('search?q=' + encodeURIComponent(CONFIG.artistName) + '&type=artist&limit=1', function(err, data) {
-        if (!err && data.artists && data.artists.items.length > 0) {
-          spotifyArtist = data.artists.items[0];
-          spotifyId = spotifyArtist.id;
-          console.log('[Muse Live] Spotify:', spotifyArtist.name, 'followers:', spotifyArtist.followers.total);
-        } else {
-          console.warn('[Muse Live] Spotify search failed');
-        }
-        checkDone();
+        if (!err && data.artist) { artistData = data.artist; }
+        done();
       });
     }
 
     function fetchTracks() {
       var lastfmTracks = [];
       var spotifyTracks = [];
-      var trackPending = 0;
-      if (hasLastfm) trackPending++;
-      if (hasSpotify && spotifyId) trackPending++;
-
-      function trackDone() {
-        trackPending--;
-        if (trackPending > 0) return;
-        updatePage(lastfmTracks, spotifyTracks);
-      }
+      var tp = hasLastfm ? 2 : 1;
+      function td() { tp--; if (tp === 0) update(); }
 
       if (hasLastfm) {
         lastfm('artist.gettoptracks', { artist: CONFIG.artistName, limit: 10 }, function(err, data) {
-          if (!err && data.toptracks && data.toptracks.track) {
-            lastfmTracks = data.toptracks.track;
-          }
-          trackDone();
+          if (!err && data.toptracks && data.toptracks.track) lastfmTracks = data.toptracks.track;
+          td();
         });
-      }
+      } else { tp--; }
 
-      if (hasSpotify && spotifyId) {
+      if (spotifyId) {
         spotify('artists/' + spotifyId + '/top-tracks?market=US', function(err, data) {
-          if (!err && data.tracks) {
-            spotifyTracks = data.tracks;
-          }
-          trackDone();
+          if (!err && data.tracks) spotifyTracks = data.tracks;
+          td();
         });
+      } else { tp--; }
+
+      if (tp <= 0) update();
+
+      function update() {
+        var artist = artistData || { name: CONFIG.artistName, stats: {} };
+        if (spotifyArtist) artist.name = spotifyArtist.name;
+        var path = window.location.pathname;
+        if (path.indexOf('/dashboard') > -1 || path === '/' || path === '/22/' || path === '/22') {
+          updateDashboard(artist, lastfmTracks, spotifyArtist, spotifyTracks);
+          updateSidebar(artist, spotifyArtist);
+        } else if (path.indexOf('/catalogue') > -1) {
+          updateCatalogue(artist, lastfmTracks, spotifyTracks);
+          updateSidebar(artist, spotifyArtist);
+        } else if (path.indexOf('/marketing') > -1) {
+          updateMarketing(artist, spotifyArtist);
+          updateSidebar(artist, spotifyArtist);
+        } else if (path.indexOf('/visuals') > -1) {
+          updateVisuals(artist, spotifyArtist);
+          updateSidebar(artist, spotifyArtist);
+        }
+        console.log('[Muse Live] Done.');
       }
-
-      if (trackPending === 0) updatePage(lastfmTracks, spotifyTracks);
-    }
-
-    function updatePage(lastfmTracks, spotifyTracks) {
-      var artist = artistData || (spotifyArtist ? { name: spotifyArtist.name, stats: {} } : { name: CONFIG.artistName, stats: {} });
-      if (spotifyArtist && !artistData) {
-        artist.stats = artist.stats || {};
-      }
-
-      var path = window.location.pathname;
-      if (path.indexOf('/dashboard') > -1 || path === '/' || path === '/22/' || path.indexOf('index') > -1) {
-        updateDashboard(artist, lastfmTracks, spotifyArtist, spotifyTracks);
-        updateSidebar(artist, spotifyArtist);
-      } else if (path.indexOf('/catalogue') > -1) {
-        updateCatalogue(artist, lastfmTracks, spotifyTracks);
-        updateSidebar(artist, spotifyArtist);
-      } else if (path.indexOf('/marketing') > -1) {
-        updateMarketing(artist, spotifyArtist);
-        updateSidebar(artist, spotifyArtist);
-      } else if (path.indexOf('/visuals') > -1) {
-        updateVisuals(artist, spotifyArtist);
-        updateSidebar(artist, spotifyArtist);
-      }
-
-      console.log('[Muse Live] Page updated with live data.');
     }
   }
 
-  // Run after React renders
   setTimeout(fetchAll, 1500);
   setTimeout(fetchAll, 3500);
-
-  // Re-run on pageshow (bfcache)
   window.addEventListener('pageshow', function(e) {
     if (e.persisted) setTimeout(fetchAll, 800);
   });
