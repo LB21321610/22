@@ -58,7 +58,15 @@ jobs:
               } for t in tracks]
           }
 
-          new_json = json.dumps(muse, ensure_ascii=False)
+          def script_json(value):
+              return (
+                  json.dumps(value, ensure_ascii=False)
+                  .replace('</', '<\\/')
+                  .replace('\u2028', '\\u2028')
+                  .replace('\u2029', '\\u2029')
+              )
+
+          new_json = script_json(muse)
 
           # ===== 2. Build artist search index (popular artists across genres) =====
           print('\n=== Building artist index ===')
@@ -94,6 +102,8 @@ jobs:
                           'id': a['id'],
                           'name': a['name'],
                           'nb_fan': a['nb_fan'],
+                          'genre': term,
+                          'type': 'artist',
                           'picture_small': a.get('picture_small', ''),
                           'picture_medium': a.get('picture_medium', ''),
                       }
@@ -112,13 +122,15 @@ jobs:
                       'id': a['id'],
                       'name': a['name'],
                       'nb_fan': a['nb_fan'],
+                      'genre': 'chart',
+                      'type': 'artist',
                       'picture_small': a.get('picture_small', ''),
                       'picture_medium': a.get('picture_medium', ''),
                   }
           except Exception as e:
               print(f'  warn: chart: {e}')
 
-          artists_json = json.dumps(list(index.values()), ensure_ascii=False)
+          artists_json = script_json(list(index.values()))
           print(f'  Index: {len(index)} artists, {len(artists_json)} bytes')
 
           # ===== 3. Update HTML files =====
